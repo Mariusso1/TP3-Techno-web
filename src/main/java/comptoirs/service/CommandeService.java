@@ -2,7 +2,9 @@ package comptoirs.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.NoSuchElementException;
 
+import comptoirs.entity.Produit;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
@@ -106,8 +108,22 @@ public class CommandeService {
      */
     @Transactional
     public Ligne ajouterLigne(int commandeNum, int produitRef, @Positive int quantite) {
-        // TODO : implémenter cette méthode
-        throw new UnsupportedOperationException("Pas encore implémenté");
+        Commande commande = commandeDao.findById(commandeNum).orElseThrow(() -> new NoSuchElementException("La commande n'existe pas"));
+        Produit produit = produitDao.findById(produitRef).orElseThrow(() -> new NoSuchElementException("Le produit n'existe pas"));
+        if (produit.isIndisponible()) {
+            throw new IllegalStateException("Le produit est indisponible");
+        }
+        if (commande.getEnvoyeele() != null){
+            throw  new IllegalStateException("La commande à été envoyée");
+
+        }
+        if (quantite > produit.getUnitesEnStock()){
+            throw new IllegalStateException("Il n'y a pas assez de produits en stock");
+        }
+        Ligne ligne = new Ligne(commande, produit, quantite);
+        ligne.getProduit().setUnitesCommandees(ligne.getProduit().getUnitesCommandees()+ quantite);
+        ligneDao.save(ligne);
+       return ligne;
     }
 
     /**
@@ -128,9 +144,19 @@ public class CommandeService {
      * @throws java.util.NoSuchElementException si la commande n'existe pas
      * @throws IllegalStateException            si la commande a déjà été envoyée
      */
+
     @Transactional
     public Commande enregistreExpedition(int commandeNum) {
-        // TODO : implémenter cette méthode
-        throw new UnsupportedOperationException("Pas encore implémenté");
+        Commande commande = commandeDao.findById(commandeNum).orElseThrow(() -> new NoSuchElementException("La commande n'existe pas"));
+        if (commande.getEnvoyeele() != null){
+            throw  new IllegalStateException("La commande à déjà été envoyée");
+        }
+        commande.setEnvoyeele(LocalDate.now());
+        for(Ligne ligne : commande.getLignes()){
+            ligne.getProduit().setUnitesEnStock(ligne.getProduit().getUnitesEnStock()- ligne.getQuantite());
+            ligne.getProduit().setUnitesCommandees(ligne.getProduit().getUnitesCommandees() - ligne.getQuantite());
+        }
+        return commande;
+
     }
 }
